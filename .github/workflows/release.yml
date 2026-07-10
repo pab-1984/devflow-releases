@@ -7,6 +7,9 @@ name: release
 # Para publicar una versión: crear el tag en AMBOS repos con la misma versión.
 #   1) en devflow (privado):        git tag vX.Y.Z && git push origin vX.Y.Z
 #   2) en devflow-releases (este):  git tag vX.Y.Z && git push origin vX.Y.Z   <- dispara esto
+#
+# FIRMA DE CÓDIGO: los secrets de abajo están vacíos hasta que los cargues. Mientras tanto los
+# builds salen SIN firmar (no rompe). Ver docs/SIGNING.md en el repo privado para obtenerlos.
 on:
   push:
     tags: ['v*']
@@ -34,6 +37,25 @@ jobs:
             args: ''
 
     runs-on: ${{ matrix.platform }}
+    env:
+      # Firma del updater (auto-generada, ya configurada)
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      # Firma de código macOS (Developer ID + notarización). Vacío => build sin firmar.
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      # Firma de código Windows (Azure Trusted Signing). Vacío => build sin firmar.
+      # Consumidos por src-tauri/sign-windows.ps1 (signCommand) durante el bundle.
+      TRUSTED_SIGNING_ENDPOINT: ${{ secrets.TRUSTED_SIGNING_ENDPOINT }}
+      TRUSTED_SIGNING_ACCOUNT: ${{ secrets.TRUSTED_SIGNING_ACCOUNT }}
+      TRUSTED_SIGNING_PROFILE: ${{ secrets.TRUSTED_SIGNING_PROFILE }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
     steps:
       - name: checkout código privado (devflow)
         uses: actions/checkout@v4
@@ -63,14 +85,16 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
+      - name: install Azure Trusted Signing CLI (Windows, solo si está configurado)
+        if: matrix.platform == 'windows-latest' && env.TRUSTED_SIGNING_ENDPOINT != ''
+        run: cargo install trusted-signing-cli
+
       - name: install frontend dependencies
         run: npm ci
 
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'DevFlow __VERSION__'
