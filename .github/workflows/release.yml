@@ -1,0 +1,80 @@
+name: release
+
+# Repo PÚBLICO de solo-releases. El código vive en el repo privado pab-1984/devflow.
+# Este workflow hace checkout del código privado (deploy key read-only), lo buildea para
+# las 3 plataformas y publica el Release + latest.json (auto-updater) acá, en público.
+#
+# Para publicar una versión: crear el tag en AMBOS repos con la misma versión.
+#   1) en devflow (privado):        git tag vX.Y.Z && git push origin vX.Y.Z
+#   2) en devflow-releases (este):  git tag vX.Y.Z && git push origin vX.Y.Z   <- dispara esto
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Ref del repo de código (devflow) a buildear (tag o rama)'
+        default: 'master'
+
+jobs:
+  publish-tauri:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'macos-latest'   # Apple Silicon
+            args: '--target aarch64-apple-darwin'
+          - platform: 'macos-latest'   # Intel
+            args: '--target x86_64-apple-darwin'
+          - platform: 'ubuntu-22.04'
+            args: ''
+          - platform: 'windows-latest'
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: checkout código privado (devflow)
+        uses: actions/checkout@v4
+        with:
+          repository: pab-1984/devflow
+          ref: ${{ github.event.inputs.ref || github.ref_name }}
+          ssh-key: ${{ secrets.CODE_REPO_SSH_KEY }}
+
+      - name: install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: install frontend dependencies
+        run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'DevFlow __VERSION__'
+          releaseBody: 'Descargá el instalador para tu sistema operativo desde los assets. La app se auto-actualiza.'
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
