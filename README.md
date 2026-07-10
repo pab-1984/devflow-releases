@@ -1,25 +1,31 @@
 # DevFlow — releases
 
-Instaladores oficiales y manifests de auto-actualización de **DevFlow**, un entorno de
-desarrollo de escritorio con un equipo de agentes IA, orquestador de workflows y gestión
-de proyectos punta a punta.
+Official installers and auto-update manifests for **DevFlow**, a desktop development
+environment with a team of AI agents, a workflow orchestrator and end-to-end project
+management.
 
-## Descargar
+## Download
 
-Bajá el instalador para tu sistema operativo desde la **[última release](../../releases/latest)**:
+Grab the installer for your OS from the **[latest release](../../releases/latest)**:
 
-| Sistema | Archivo |
+| System | File |
 |---|---|
 | Windows | `DevFlow_*_x64-setup.exe` |
 | macOS (Apple Silicon) | `DevFlow_*_aarch64.dmg` |
 | macOS (Intel) | `DevFlow_*_x64.dmg` |
 | Linux | `DevFlow_*_amd64.AppImage` · `.deb` · `.rpm` |
 
-Una vez instalado, DevFlow se **auto-actualiza**: avisa cuando hay una versión nueva firmada
-y se actualiza solo.
+Or install from the terminal (macOS and Linux):
 
-## Sobre este repo
+```sh
+curl -fsSL https://raw.githubusercontent.com/pab-1984/devflow-releases/main/install.sh | sh
+```
 
-Este repositorio contiene únicamente los **binarios publicados** y los manifests del updater.
-El código fuente se mantiene en un repositorio privado; la CI de acá lo compila y firma para
-las tres plataformas en cada versión.
+Once installed, DevFlow **auto-updates**: it notifies you when a new signed version is
+available and updates itself.
+
+## About this repo
+
+This repository holds only the **published binaries** and the updater manifests. The source
+code lives in a private repository; the CI here builds and signs it for the three platforms on
+every release.

@@ -1,22 +1,22 @@
 name: release
 
-# Repo PÚBLICO de solo-releases. El código vive en el repo privado pab-1984/devflow.
-# Este workflow hace checkout del código privado (deploy key read-only), lo buildea para
-# las 3 plataformas y publica el Release + latest.json (auto-updater) acá, en público.
+# PUBLIC releases-only repo. The source code lives in the private repo pab-1984/devflow.
+# This workflow checks out the private code (read-only deploy key), builds it for the three
+# platforms and publishes the Release + latest.json (auto-updater) here, in public.
 #
-# Para publicar una versión: crear el tag en AMBOS repos con la misma versión.
-#   1) en devflow (privado):        git tag vX.Y.Z && git push origin vX.Y.Z
-#   2) en devflow-releases (este):  git tag vX.Y.Z && git push origin vX.Y.Z   <- dispara esto
+# To publish a version: create the tag in BOTH repos with the same version.
+#   1) in devflow (private):        git tag vX.Y.Z && git push origin vX.Y.Z
+#   2) in devflow-releases (this):  git tag vX.Y.Z && git push origin vX.Y.Z   <- triggers this
 #
-# FIRMA DE CÓDIGO: los secrets de abajo están vacíos hasta que los cargues. Mientras tanto los
-# builds salen SIN firmar (no rompe). Ver docs/SIGNING.md en el repo privado para obtenerlos.
+# CODE SIGNING: the secrets below are empty until you set them. Until then, builds ship
+# UNSIGNED (does not break). See docs/SIGNING.md in the private repo for how to obtain them.
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Ref del repo de código (devflow) a buildear (tag o rama)'
+        description: 'Ref of the code repo (devflow) to build (tag or branch)'
         default: 'master'
 
 jobs:
@@ -38,18 +38,18 @@ jobs:
 
     runs-on: ${{ matrix.platform }}
     env:
-      # Firma del updater (auto-generada, ya configurada)
+      # Updater signing (auto-generated, already configured)
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-      # Firma de código macOS (Developer ID + notarización). Vacío => build sin firmar.
+      # macOS code signing (Developer ID + notarization). Empty => unsigned build.
       APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
       APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
       APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
       APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      # Firma de código Windows (Azure Trusted Signing). Vacío => build sin firmar.
-      # Consumidos por src-tauri/sign-windows.ps1 (signCommand) durante el bundle.
+      # Windows code signing (Azure Trusted Signing). Empty => unsigned build.
+      # Consumed by src-tauri/sign-windows.ps1 (signCommand) during bundling.
       TRUSTED_SIGNING_ENDPOINT: ${{ secrets.TRUSTED_SIGNING_ENDPOINT }}
       TRUSTED_SIGNING_ACCOUNT: ${{ secrets.TRUSTED_SIGNING_ACCOUNT }}
       TRUSTED_SIGNING_PROFILE: ${{ secrets.TRUSTED_SIGNING_PROFILE }}
@@ -57,7 +57,7 @@ jobs:
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
     steps:
-      - name: checkout código privado (devflow)
+      - name: checkout private code (devflow)
         uses: actions/checkout@v4
         with:
           repository: pab-1984/devflow
@@ -85,7 +85,7 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
-      - name: install Azure Trusted Signing CLI (Windows, solo si está configurado)
+      - name: install Azure Trusted Signing CLI (Windows, only when configured)
         if: matrix.platform == 'windows-latest' && env.TRUSTED_SIGNING_ENDPOINT != ''
         run: cargo install trusted-signing-cli
 
@@ -98,7 +98,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'DevFlow __VERSION__'
-          releaseBody: 'Descargá el instalador para tu sistema operativo desde los assets. La app se auto-actualiza.'
+          releaseBody: 'Download the installer for your operating system from the assets below. The app auto-updates.'
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
