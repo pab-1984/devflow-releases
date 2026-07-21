@@ -29,12 +29,16 @@ jobs:
         include:
           - platform: 'macos-latest'   # Apple Silicon
             args: '--target aarch64-apple-darwin'
+            triple: 'aarch64-apple-darwin'
           - platform: 'macos-latest'   # Intel
             args: '--target x86_64-apple-darwin'
+            triple: 'x86_64-apple-darwin'
           - platform: 'ubuntu-22.04'
             args: ''
+            triple: 'x86_64-unknown-linux-gnu'
           - platform: 'windows-latest'
             args: ''
+            triple: 'x86_64-pc-windows-msvc'
 
     runs-on: ${{ matrix.platform }}
     env:
@@ -91,6 +95,12 @@ jobs:
 
       - name: install frontend dependencies
         run: npm ci
+
+      # OpenCode ships as a bundled Tauri sidecar (no separate install for users) — this fetches the
+      # native binary for the target being built right now (never committed, ~170MB/platform,
+      # exceeds GitHub's 100MB limit). See scripts/fetch-opencode-sidecar.mjs in the private repo.
+      - name: fetch OpenCode sidecar binary
+        run: node scripts/fetch-opencode-sidecar.mjs ${{ matrix.triple }}
 
       - uses: tauri-apps/tauri-action@v0
         env:
