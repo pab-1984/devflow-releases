@@ -60,6 +60,11 @@ jobs:
       # have enabled — this makes linuxdeploy extract-and-run instead (no FUSE needed). Harmless on
       # the other platforms (unused there). See tauri-apps/tauri#14796.
       APPIMAGE_EXTRACT_AND_RUN: "1"
+      # linuxdeploy-plugin-gtk auto-detects the GTK version by running `ldd` against files in the
+      # AppDir — including the bundled OpenCode sidecar binary, which crashes ldd (likely statically
+      # linked) and aborts the whole plugin ("Failed to run ldd: exited with code 1", confirmed via
+      # --verbose). Setting this explicitly skips that auto-detection. DevFlow uses webkit2gtk-4.1 (GTK3).
+      DEPLOY_GTK_VERSION: "3"
     steps:
       - name: checkout private code (devflow)
         uses: actions/checkout@v4
