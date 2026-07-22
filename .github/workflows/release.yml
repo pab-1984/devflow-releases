@@ -8,8 +8,11 @@ name: release
 #   1) in devflow (private):        git tag vX.Y.Z && git push origin vX.Y.Z
 #   2) in devflow-releases (this):  git tag vX.Y.Z && git push origin vX.Y.Z   <- triggers this
 #
-# CODE SIGNING: the secrets below are empty until you set them. Until then, builds ship
-# UNSIGNED (does not break). See docs/SIGNING.md in the private repo for how to obtain them.
+# CODE SIGNING: the secrets below are empty until you set them. Until then, macOS/Windows builds
+# ship unsigned/ad-hoc (Windows already degrades gracefully; macOS needed the extra "mac_sign" step
+# below because tauri attempts codesign — and fails — even when APPLE_CERTIFICATE is merely an empty
+# string, not unset; see tauri-apps/tauri-action#234). See docs/SIGNING.md in the private repo for
+# how to obtain real certificates.
 on:
   push:
     tags: ['v*']
@@ -45,13 +48,6 @@ jobs:
       # Updater signing (auto-generated, already configured)
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-      # macOS code signing (Developer ID + notarization). Empty => unsigned build.
-      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       # Windows code signing (Azure Trusted Signing). Empty => unsigned build.
       # Consumed by src-tauri/sign-windows.ps1 (signCommand) during bundling.
       TRUSTED_SIGNING_ENDPOINT: ${{ secrets.TRUSTED_SIGNING_ENDPOINT }}
@@ -60,6 +56,10 @@ jobs:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      # AppImage bundling needs to mount itself via FUSE, which GitHub's ubuntu-22.04 runners don't
+      # have enabled — this makes linuxdeploy extract-and-run instead (no FUSE needed). Harmless on
+      # the other platforms (unused there). See tauri-apps/tauri#14796.
+      APPIMAGE_EXTRACT_AND_RUN: "1"
     steps:
       - name: checkout private code (devflow)
         uses: actions/checkout@v4
@@ -72,7 +72,16 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libfuse2
+
+      # An empty APPLE_CERTIFICATE still makes tauri attempt codesign and fail (tauri-apps/tauri-action#234)
+      # — the env vars must be omitted entirely, not just left empty, when no certificate is configured.
+      - name: check macOS signing secrets
+        id: mac_sign
+        if: matrix.platform == 'macos-latest'
+        run: echo "configured=$([ -n \"$CERT\" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        env:
+          CERT: ${{ secrets.APPLE_CERTIFICATE }}
 
       - name: setup node
         uses: actions/setup-node@v4
@@ -102,9 +111,31 @@ jobs:
       - name: fetch OpenCode sidecar binary
         run: node scripts/fetch-opencode-sidecar.mjs ${{ matrix.triple }}
 
+      # Unsigned/ad-hoc path: windows, linux, and macOS whenever no Apple certificate is configured.
+      # APPLE_* must be absent (not just empty) here — see the "check macOS signing secrets" step.
       - uses: tauri-apps/tauri-action@v0
+        if: matrix.platform != 'macos-latest' || steps.mac_sign.outputs.configured != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'DevFlow __VERSION__'
+          releaseBody: 'Download the installer for your operating system from the assets below. The app auto-updates.'
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
+
+      # Signed path: macOS only, only when an Apple Developer certificate is actually configured.
+      - uses: tauri-apps/tauri-action@v0
+        if: matrix.platform == 'macos-latest' && steps.mac_sign.outputs.configured == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'DevFlow __VERSION__'
