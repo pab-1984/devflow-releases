@@ -79,7 +79,12 @@ jobs:
       - name: check macOS signing secrets
         id: mac_sign
         if: matrix.platform == 'macos-latest'
-        run: echo "configured=$([ -n \"$CERT\" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        run: |
+          if [ -n "$CERT" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
         env:
           CERT: ${{ secrets.APPLE_CERTIFICATE }}
 
