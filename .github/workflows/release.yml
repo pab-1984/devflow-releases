@@ -112,7 +112,10 @@ jobs:
         run: node scripts/fetch-opencode-sidecar.mjs ${{ matrix.triple }}
 
       # Unsigned/ad-hoc path: windows, linux, and macOS whenever no Apple certificate is configured.
-      # APPLE_* must be absent (not just empty) here — see the "check macOS signing secrets" step.
+      # --no-sign is the documented tauri CLI flag to skip codesigning outright (belt-and-suspenders
+      # alongside omitting the APPLE_* env vars, which alone did not stop a codesign attempt from
+      # still firing on macOS for reasons not fully understood — see the "why" note in the mac_sign
+      # step). --verbose surfaces linuxdeploy's real output on Linux instead of a generic wrapper error.
       - uses: tauri-apps/tauri-action@v0
         if: matrix.platform != 'macos-latest' || steps.mac_sign.outputs.configured != 'true'
         env:
@@ -123,7 +126,7 @@ jobs:
           releaseBody: 'Download the installer for your operating system from the assets below. The app auto-updates.'
           releaseDraft: false
           prerelease: false
-          args: ${{ matrix.args }}
+          args: ${{ matrix.args }} --no-sign --verbose
 
       # Signed path: macOS only, only when an Apple Developer certificate is actually configured.
       - uses: tauri-apps/tauri-action@v0
