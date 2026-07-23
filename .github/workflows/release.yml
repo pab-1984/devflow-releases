@@ -126,10 +126,16 @@ jobs:
         run: node scripts/fetch-opencode-sidecar.mjs ${{ matrix.triple }}
 
       # Unsigned/ad-hoc path: windows, linux, and macOS whenever no Apple certificate is configured.
-      # --no-sign is the documented tauri CLI flag to skip codesigning outright (belt-and-suspenders
-      # alongside omitting the APPLE_* env vars, which alone did not stop a codesign attempt from
-      # still firing on macOS for reasons not fully understood — see the "why" note in the mac_sign
-      # step). --verbose surfaces linuxdeploy's real output on Linux instead of a generic wrapper error.
+      # Do NOT pass --no-sign here: tauri-cli's `no_sign` flag is a single switch that ALSO disables
+      # the updater signature step (crates/tauri-cli/src/bundle.rs::sign_updaters — separate mechanism,
+      # gated only by TAURI_SIGNING_PRIVATE_KEY, unrelated to Apple/codesign). v0.2.0 shipped with
+      # --no-sign and silently produced a release with zero .sig files and no latest.json — the
+      # in-app auto-updater was completely broken, not caught because prior CI validation only checked
+      # "did the build succeed", never "is the updater manifest actually there". The macOS codesign
+      # crash --no-sign originally worked around (`security import` failing on an empty
+      # APPLE_CERTIFICATE) is already prevented by this step omitting the APPLE_* env vars entirely —
+      # they're only set on the signed step below. --verbose surfaces linuxdeploy's real output on
+      # Linux instead of a generic wrapper error.
       - uses: tauri-apps/tauri-action@v0
         if: matrix.platform != 'macos-latest' || steps.mac_sign.outputs.configured != 'true'
         env:
@@ -140,7 +146,7 @@ jobs:
           releaseBody: 'Download the installer for your operating system from the assets below. The app auto-updates.'
           releaseDraft: false
           prerelease: false
-          args: ${{ matrix.args }} --no-sign --verbose
+          args: ${{ matrix.args }} --verbose
 
       # Signed path: macOS only, only when an Apple Developer certificate is actually configured.
       - uses: tauri-apps/tauri-action@v0
